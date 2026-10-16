@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 from yummy_app import YummyApp
 import gps_service
 
@@ -25,7 +26,53 @@ class TestEasyLevel(unittest.TestCase):
         self.assertEqual(self.app.calculate_order_total(cart), 0.0)
 
 
-# Cap do 2 (Tiet 3): se them TestMediumLevel va TestHardLevel o day
+class TestMediumLevel(unittest.TestCase):
+    """Kiem thu apply_promo_code (mang di dong + phien ban OS)"""
+
+    def test_promo_online_valid(self):
+        app = YummyApp("online", 15)
+        self.assertAlmostEqual(app.apply_promo_code(100000, "GIAM10"), 90000)
+
+    def test_promo_offline_raises_connection_error(self):
+        app = YummyApp("offline", 15)
+        with self.assertRaises(ConnectionError):
+            app.apply_promo_code(100000, "GIAM10")
+
+    def test_special_code_on_os15(self):
+        app = YummyApp("online", 15)
+        self.assertAlmostEqual(app.apply_promo_code(100000, "NEW_OS_ONLY"), 80000)
+
+    def test_special_code_on_os14_raises_value_error(self):
+        app = YummyApp("online", 14)
+        with self.assertRaises(ValueError):
+            app.apply_promo_code(100000, "NEW_OS_ONLY")
+
+
+class TestHardLevel(unittest.TestCase):
+    """Kiem thu get_nearby_restaurants bang Mocking GPS"""
+
+    def setUp(self):
+        self.app = YummyApp()
+
+    @patch('yummy_app.gps_service.get_current_location')
+    def test_gps_in_area(self, mock_gps):
+        mock_gps.return_value = (10.0, 105.0)
+        self.assertEqual(
+            self.app.get_nearby_restaurants(),
+            ["Nha hang Pho Ly Quoc Su", "Bun cha Huong Lien"],
+        )
+
+    @patch('yummy_app.gps_service.get_current_location')
+    def test_gps_out_of_area(self, mock_gps):
+        mock_gps.return_value = (20.0, 110.0)
+        self.assertEqual(self.app.get_nearby_restaurants(), [])
+
+    @patch('yummy_app.gps_service.get_current_location')
+    def test_gps_signal_lost(self, mock_gps):
+        mock_gps.side_effect = gps_service.GPSSignalLostError()
+        self.assertEqual(
+            self.app.get_nearby_restaurants(), "Khong the xac dinh vi tri."
+        )
 
 
 if __name__ == '__main__':
